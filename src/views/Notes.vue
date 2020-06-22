@@ -1,5 +1,5 @@
 <template>
-    <div class="container">
+    <div class="container overflow-auto">
         <h1>Notes</h1>
         <b-alert :show="dismissCountDown"
         dismissible
@@ -15,8 +15,18 @@
             <b-form-input id="inputNote" v-model="note.description" placeholder="Add a description" class="my-2"></b-form-input>
             <b-button type="submit" class="btn-success my-2 btn-block">Add</b-button>
         </b-form>
-        <b-table striped hover
+        <b-pagination
+            v-model="currentPage"
+            :total-rows="rows"
+            :per-page="perPage"
+            v-on:change="onChangePage"
+            aria-controls="my-table">
+        </b-pagination>
+        <b-table id="my-table"
+                 striped hover
+                 :per-page="perPage"
                  :items="notesList"
+                 :current-page="currentPage"
                  :fields="fields"
                  :busy.sync="isBusy"
         >
@@ -52,10 +62,13 @@
             return {
                 fields: ['_id','name','description','userId','dateAdded','Actions'],
                 //notes: [],
+                currentPage: 1,
                 isBusy: false,
                 message: { color: '', text: '' },
                 dismissSecs: 5,
                 dismissCountDown: 0,
+                totalItems: 0,
+                perPage: 5,
                 notes: [],
                 note: {
                     name: '',
@@ -68,6 +81,9 @@
             }
         },
         computed: {
+            rows: function(){
+                return this.totalItems.length
+            },
             ...mapState(['token']),
           notesList: {
               get: function() {
@@ -82,6 +98,21 @@
             this.listNotes();
         },
         methods: {
+            async onChangePage(page) {
+                let config = {
+                    headers: {
+                        token: this.token
+                    }
+                }
+                try {
+                    const call = await this.axios.get(`/notes?skip=${(page-1) * 5}`, config)
+                    const item = call.data
+                    Array.prototype.push.apply(this.notesList, item.data)
+                    console.log("CHANGING PAGE", this.notes)
+                } catch (e) {
+                    console.error("ERROR PAGING", e)
+                }
+            },
             async listNotes() {
                 let config = {
                     headers: {
@@ -93,15 +124,17 @@
                     let res = await this.axios.get('/notes', config);
                     let list = res.data;
                     //this.notes.data = list
-                    this.notesList = list;
+                    this.notesList = list.data;
+                    this.totalItems = list.total;
                     /*list.forEach(el => {
                         this.notesList.set(el)
                     })*/
                     this.isBusy = false;
-                    console.log(list);
+                    console.log("GET NOTES", list);
                     return list;
                 }catch (e) {
                     this.isBusy = false;
+                    this.notesList = []
                     console.error(e);
                     return []
                 }
@@ -190,7 +223,7 @@
                     const res = await this.axios.post("/notes", note, config);
                     const item = res.data;
                     console.log(item);
-                    this.notes.push(item);
+                    this.notes.push(item.data);
                     console.log("valor computado "+this.notes)
                     note.name = "";
                     note.description = "";
